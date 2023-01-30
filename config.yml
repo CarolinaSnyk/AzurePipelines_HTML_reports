@@ -1,0 +1,41 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - script: |
+      curl -L https://github.com/snyk/snyk-to-html/releases/download/v2.3.6/snyk-to-html-linux -o snyk-to-html
+      curl https://static.snyk.io/cli/latest/snyk-linux -o snyk
+      chmod +x snyk-to-html
+      chmod +x snyk
+      ./snyk auth $(SNYK_TOKEN)
+
+  - script: |
+      ./snyk code test --json | ./snyk-to-html -o $(Build.ArtifactStagingDirectory)/code.html
+    continueOnError: true
+    displayName: 'Snyk Code'
+
+  - script: |
+      ./snyk test --all-sub-projects --json | ./snyk-to-html -o $(Build.ArtifactStagingDirectory)/open-source.html
+      ./snyk monitor --all-sub-projects
+    continueOnError: true
+    displayName: 'Snyk Open Source'
+
+  - task: PublishHtmlReport@1
+    condition: succeededOrFailed()
+    inputs:
+      reportDir: $(Build.ArtifactStagingDirectory)/code.html
+      tabName: 'Snyk Code'
+
+  - task: PublishHtmlReport@1
+    condition: succeededOrFailed()
+    inputs:
+      reportDir: $(Build.ArtifactStagingDirectory)/open-source.html
+      tabName: 'Snyk Open Source'
+      
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathToPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: Snyk Reports
